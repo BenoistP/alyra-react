@@ -13,6 +13,7 @@
     "@types/react-dom": "^18.3.0",
     "bn.js": "^5.2.1",
     "browserify-zlib": "^0.2.0",
+    "cross-env": "^7.0.3",
     "crypto": "^1.0.1",
     "crypto-browserify": "^3.12.0",
     "https-browserify": "^1.0.0",
@@ -29,7 +30,10 @@
     "vm-browserify": "^1.1.2"
   },
   "scripts": {
-    "start": "react-app-rewired start",
+    "start": "npm run start:none",
+    "start:none": "cross-env BROWSER=none react-app-rewired start",
+    "start:brave": "cross-env BROWSER=brave-browser react-app-rewired start",
+    "start:default": "react-app-rewired start",
     "build": "react-app-rewired build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
