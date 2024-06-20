@@ -187,7 +187,7 @@ export const getInitializeAccountTransactionWWithoutAnchor = async (publicKey: P
       data.toArrayLike(Buffer, 'le', 8).copy(instructionData, 1); // Write data
       age.toArrayLike(Buffer, 'le', 2).copy(instructionData, 9); // Write age
       // taille.toArrayLike(Buffer, 'le', 1).copy(instructionData, 11); // Write taille
-      taille.toArrayLike(Buffer, 'le', 1).copy(instructionData, 11); // Write taille
+      // taille.toArrayLike(Buffer, 'le', 1).copy(instructionData, 11); // Write taille
   
       const instruction = new TransactionInstruction({
         keys: [
