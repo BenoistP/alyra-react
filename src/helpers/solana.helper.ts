@@ -1,6 +1,6 @@
 import { BN, Idl, Program } from "@coral-xyz/anchor";
 import { AnchorWallet, WalletContextState } from "@solana/wallet-adapter-react";
-import { Connection, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
+import { Connection, LAMPORTS_PER_SOL, PublicKey, SendTransactionError, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
 import { sign } from 'tweetnacl';
 import { IDL, PROGRAM_ID } from "../idl/idl";
 
@@ -89,17 +89,33 @@ export const transferSolana = async (wallet: WalletContextState, destination: Pu
     }
 };
 
-export const initializeAccount = async (anchorWallet: AnchorWallet, data: number, age: number): Promise<string | null> => {
+// export const initializeAccount = async (anchorWallet: AnchorWallet, data: number, age: number): Promise<string | null> => {
+export const initializeAccount = async (anchorWallet: AnchorWallet, data: number, age: number, taille: number): Promise<string | null> => {
     try {
-      const accountTransaction = await getInitializeAccountTransaction(anchorWallet.publicKey, new BN(data), new BN(age));
+      console.debug('initializeAccount', data, age, taille);
+
       // const accountTransaction = await getInitializeAccountTransactionWWithoutAnchor(anchorWallet.publicKey, new BN(data), new BN(age));
+      const accountTransaction = await getInitializeAccountTransaction(anchorWallet.publicKey, new BN(data), new BN(age), new BN(taille));
+
+      console.debug('accountTransaction', accountTransaction);
   
       const recentBlockhash = await getRecentBlockhash();
       if (accountTransaction && recentBlockhash) {
           accountTransaction.feePayer = anchorWallet.publicKey;
           accountTransaction.recentBlockhash = recentBlockhash;
-          const signedTransaction = await anchorWallet.signTransaction(accountTransaction);
-          return await connection.sendRawTransaction(signedTransaction.serialize());
+          console.debug('anchorWallet.signTransaction');
+
+          try {
+            const signedTransaction = await anchorWallet.signTransaction(accountTransaction);
+            console.debug('signedTransaction', signedTransaction);
+            return await connection.sendRawTransaction(signedTransaction.serialize());
+          } catch (error) {
+            if (error instanceof SendTransactionError) {
+              console.error(error.getLogs(connection));
+            }
+          }
+          // const signedTransaction = await anchorWallet.signTransaction(accountTransaction);
+          // return await connection.sendRawTransaction(signedTransaction.serialize());
       }
       return null;
     } catch (error) {
@@ -110,6 +126,7 @@ export const initializeAccount = async (anchorWallet: AnchorWallet, data: number
 
 export const getAccount = async (publicKey: PublicKey): Promise<any> => {
     try {
+      // console.debug('getAccount', publicKey.toBase58());
       const accountSeed = Buffer.from("account");
       const [accountPda] = PublicKey.findProgramAddressSync(
         [
@@ -118,14 +135,17 @@ export const getAccount = async (publicKey: PublicKey): Promise<any> => {
         ], 
         new PublicKey(PROGRAM_ID.toString())
       );
-      return await program.account.newAccount.fetch(accountPda);
+      const fetchAccountPromise = await program.account.newAccount.fetch(accountPda);
+      // console.debug('fetchAccountPromise', JSON.stringify( (fetchAccountPromise) ) );
+      return fetchAccountPromise
     } catch (error) {
       console.error(error);
       return null;
     }
 };
 
-export const getInitializeAccountTransaction = async (publicKey: PublicKey, data: BN, age: BN): Promise<Transaction | null> => {
+// export const getInitializeAccountTransaction = async (publicKey: PublicKey, data: BN, age: BN): Promise<Transaction | null> => {
+export const getInitializeAccountTransaction = async (publicKey: PublicKey, data: BN, age: BN, taille: BN): Promise<Transaction | null> => {
     try {
       const accountSeed = Buffer.from("account");
       const [accountPda] = PublicKey.findProgramAddressSync(
@@ -135,7 +155,7 @@ export const getInitializeAccountTransaction = async (publicKey: PublicKey, data
         ], 
         new PublicKey(PROGRAM_ID.toString())
       );
-      return await program.methods.initialize(data, age)
+      return await program.methods.initialize(data, age, taille)
         .accounts({
             newAccount: accountPda,
             signer: publicKey,
@@ -148,7 +168,7 @@ export const getInitializeAccountTransaction = async (publicKey: PublicKey, data
       }
 };
 
-export const getInitializeAccountTransactionWWithoutAnchor = async (publicKey: PublicKey, data: BN, age: BN): Promise<Transaction | null> => {
+export const getInitializeAccountTransactionWWithoutAnchor = async (publicKey: PublicKey, data: BN, age: BN, taille: BN): Promise<Transaction | null> => {
     try {
       const accountSeed = Buffer.from("account");
       const [accountPda] = PublicKey.findProgramAddressSync(
@@ -159,10 +179,15 @@ export const getInitializeAccountTransactionWWithoutAnchor = async (publicKey: P
         new PublicKey(PROGRAM_ID.toString())
       );
   
-      const instructionData = Buffer.alloc(10); // Adjust size as needed
+      // u64 u16 u8
+      // 8 2 1
+      const instructionLength = 8+2+1;
+      const instructionData = Buffer.alloc(instructionLength); // Adjust size as needed
       instructionData.writeUInt8(0, 0); // This is the "initialize" instruction index
       data.toArrayLike(Buffer, 'le', 8).copy(instructionData, 1); // Write data
       age.toArrayLike(Buffer, 'le', 2).copy(instructionData, 9); // Write age
+      // taille.toArrayLike(Buffer, 'le', 1).copy(instructionData, 11); // Write taille
+      taille.toArrayLike(Buffer, 'le', 1).copy(instructionData, 11); // Write taille
   
       const instruction = new TransactionInstruction({
         keys: [
@@ -174,8 +199,15 @@ export const getInitializeAccountTransactionWWithoutAnchor = async (publicKey: P
         data: instructionData,
       });
   
-      const transaction = new Transaction().add(instruction);
-      return transaction;
+      try {
+        const transaction = new Transaction().add(instruction);
+        return transaction;
+      } catch (error) {
+        if (error instanceof SendTransactionError) {
+          console.error(error.getLogs(connection));
+        }
+        return null;
+      }
     } catch (error) {
       console.error(error);
       return null;

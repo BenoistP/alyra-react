@@ -29,10 +29,6 @@
         {
           "name": "age",
           "type": "u16"
-        },
-        {
-          "name": "taille",
-          "type": "u8"
         }
       ]
     }
@@ -50,10 +46,6 @@
           {
             "name": "age",
             "type": "u16"
-          },
-          {
-            "name": "taille",
-            "type": "u8"
           }
         ]
       }
