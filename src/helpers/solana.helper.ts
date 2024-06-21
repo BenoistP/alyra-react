@@ -1,6 +1,7 @@
 import { BN, Idl, Program } from "@coral-xyz/anchor";
 import { AnchorWallet, WalletContextState } from "@solana/wallet-adapter-react";
-import { Connection, LAMPORTS_PER_SOL, PublicKey, SendTransactionError, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
+import { Connection, LAMPORTS_PER_SOL, PublicKey, SendTransactionError, SystemProgram, Transaction } from "@solana/web3.js";
+// import { TransactionInstruction } from "@solana/web3.js";
 import { sign } from 'tweetnacl';
 import { IDL, PROGRAM_ID } from "../idl/idl";
 
@@ -89,13 +90,12 @@ export const transferSolana = async (wallet: WalletContextState, destination: Pu
     }
 };
 
-// export const initializeAccount = async (anchorWallet: AnchorWallet, data: number, age: number): Promise<string | null> => {
 export const initializeAccount = async (anchorWallet: AnchorWallet, data: number, age: number, taille: number): Promise<string | null> => {
     try {
       console.debug('initializeAccount', data, age, taille);
 
-      // const accountTransaction = await getInitializeAccountTransactionWWithoutAnchor(anchorWallet.publicKey, new BN(data), new BN(age));
-      const accountTransaction = await getInitializeAccountTransaction(anchorWallet.publicKey, new BN(data), new BN(age), new BN(taille));
+      // const accountTransaction = await getInitializeAccountTransactionWithoutAnchor(anchorWallet.publicKey, new BN(data), new BN(age));
+      const accountTransaction = await getInitializeAccountTransactionWithAnchor(anchorWallet.publicKey, new BN(data), new BN(age), new BN(taille));
 
       console.debug('accountTransaction', accountTransaction);
   
@@ -110,8 +110,13 @@ export const initializeAccount = async (anchorWallet: AnchorWallet, data: number
             console.debug('signedTransaction', signedTransaction);
             return await connection.sendRawTransaction(signedTransaction.serialize());
           } catch (error) {
+            // // : User rejected the request
+            // if (error instanceof WalletSignTransactionError) {
+            // }
             if (error instanceof SendTransactionError) {
               console.error(error.getLogs(connection));
+            } else {
+              console.error(error);
             }
           }
           // const signedTransaction = await anchorWallet.signTransaction(accountTransaction);
@@ -126,8 +131,10 @@ export const initializeAccount = async (anchorWallet: AnchorWallet, data: number
 
 export const getAccount = async (publicKey: PublicKey): Promise<any> => {
     try {
-      // console.debug('getAccount', publicKey.toBase58());
+      console.debug('getAccount', publicKey.toBase58());
       const accountSeed = Buffer.from("account");
+      console.debug('accountSeed', accountSeed);
+
       const [accountPda] = PublicKey.findProgramAddressSync(
         [
             accountSeed, 
@@ -139,14 +146,14 @@ export const getAccount = async (publicKey: PublicKey): Promise<any> => {
       // console.debug('fetchAccountPromise', JSON.stringify( (fetchAccountPromise) ) );
       return fetchAccountPromise
     } catch (error) {
-      console.error(error);
+      console.error(`getAccount: ${error}`);
       return null;
     }
 };
 
-// export const getInitializeAccountTransaction = async (publicKey: PublicKey, data: BN, age: BN): Promise<Transaction | null> => {
-export const getInitializeAccountTransaction = async (publicKey: PublicKey, data: BN, age: BN, taille: BN): Promise<Transaction | null> => {
+export const getInitializeAccountTransactionWithAnchor = async (publicKey: PublicKey, data: BN, age: BN, taille: BN): Promise<Transaction | null> => {
     try {
+      console.debug(`getInitializeAccountTransactionWithAnchor publicKey: ${publicKey.toBase58()} data: ${data} age: ${age} taille: ${taille}`);
       const accountSeed = Buffer.from("account");
       const [accountPda] = PublicKey.findProgramAddressSync(
         [
@@ -155,20 +162,21 @@ export const getInitializeAccountTransaction = async (publicKey: PublicKey, data
         ], 
         new PublicKey(PROGRAM_ID.toString())
       );
+      // return await program.methods.initialize(data, age)
       return await program.methods.initialize(data, age, taille)
-        .accounts({
+      .accounts({
             newAccount: accountPda,
             signer: publicKey,
             systemProgram: SystemProgram.programId
         })
         .transaction()
       } catch (error) {
-        console.error(error);
+        console.error(`getInitializeAccountTransactionWithAnchor: ${error}`);
         return null;
       }
 };
-
-export const getInitializeAccountTransactionWWithoutAnchor = async (publicKey: PublicKey, data: BN, age: BN, taille: BN): Promise<Transaction | null> => {
+/*
+export const getInitializeAccountTransactionWithoutAnchor = async (publicKey: PublicKey, data: BN, age: BN, taille: BN): Promise<Transaction | null> => {
     try {
       const accountSeed = Buffer.from("account");
       const [accountPda] = PublicKey.findProgramAddressSync(
@@ -179,16 +187,29 @@ export const getInitializeAccountTransactionWWithoutAnchor = async (publicKey: P
         new PublicKey(PROGRAM_ID.toString())
       );
   
-      // u64 u16 u8
-      // 8 2 1
-      const instructionLength = 8+2+1;
+
+      // const instructionData = Buffer.alloc(10); // Adjust size as needed
+      // instructionData.writeUInt8(0, 0); // This is the "initialize" instruction index
+      // data.toArrayLike(Buffer, 'le', 8).copy(instructionData, 1); // Write data
+      // age.toArrayLike(Buffer, 'le', 2).copy(instructionData, 9); // Write age
+
+      // // u8 u64 u16 u8
+      // // 1 + 8 + 2 + 1
+      // const instructionLength = 1 + 8 + 2 + 1
+      // const instructionData = Buffer.alloc(instructionLength); // Adjust size as needed
+      // instructionData.writeUInt8(0, 0); // This is the "initialize" instruction index
+      // data.toArrayLike(Buffer, 'le', 8).copy(instructionData, 1); // Write data
+      // age.toArrayLike(Buffer, 'le', 2).copy(instructionData, 1+8); // Write age
+      // taille.toArrayLike(Buffer, 'le', 1).copy(instructionData, 1+8+2); // Write taille
+
+      // u8 u64 u16
+      // 1 + 8 + 2
+      const instructionLength = 1 + 8 + 2
       const instructionData = Buffer.alloc(instructionLength); // Adjust size as needed
-      instructionData.writeUInt8(0, 0); // This is the "initialize" instruction index
-      data.toArrayLike(Buffer, 'le', 8).copy(instructionData, 1); // Write data
-      age.toArrayLike(Buffer, 'le', 2).copy(instructionData, 9); // Write age
-      // taille.toArrayLike(Buffer, 'le', 1).copy(instructionData, 11); // Write taille
-      taille.toArrayLike(Buffer, 'le', 1).copy(instructionData, 11); // Write taille
-  
+      instructionData.writeUInt8(0, 0); // This is the "initialize" instruction index [0]
+      data.toArrayLike(Buffer, 'le', 8).copy(instructionData, 1); // Write data [1..8]
+      age.toArrayLike(Buffer, 'le', 2).copy(instructionData, 1+8); // Write age [9,10]
+
       const instruction = new TransactionInstruction({
         keys: [
           { pubkey: accountPda, isSigner: false, isWritable: true },
@@ -213,3 +234,4 @@ export const getInitializeAccountTransactionWWithoutAnchor = async (publicKey: P
       return null;
     }
   };
+  */
