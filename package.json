@@ -34,7 +34,8 @@
     "vm-browserify": "^1.1.2"
   },
   "scripts": {
-    "start": "npm run start:none",
+    "npmStart": "npm run start:none",
+    "start": "pnpm start:none",
     "start:none": "cross-env BROWSER=none react-app-rewired start",
     "start:brave": "cross-env BROWSER=brave-browser react-app-rewired start",
     "start:default": "react-app-rewired start",
